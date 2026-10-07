@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FoD RoomMaker</title>
+<meta name="description" content="Draw room layouts on a 4 m grid and save them as pictures.">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14243A" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --paper: #F4F7FB;
+  --edge: #E2E9F2;
+  --grid: #D3E0F0;
+  --grid-strong: #AFC5E0;
+  --ink: #1D4B87;
+  --door: #F5BC00;
+  --door-rim: #8F6B00;
+  --chrome: #FFFFFF;
+  --line: #D5DEEA;
+  --text: #14263D;
+  --muted: #566B86;
+  --danger: #B93A26;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0F1C2E;
+    --edge: #0A1422;
+    --grid: #1F3554;
+    --grid-strong: #355684;
+    --ink: #9CC4F5;
+    --door: #FFD23F;
+    --door-rim: #FFD23F;
+    --chrome: #14243A;
+    --line: #24385A;
+    --text: #E7EEF8;
+    --muted: #8FA5C0;
+    --danger: #F58A76;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--chrome);
+  color: var(--text);
+  font: 400 15px/1.3 var(--font);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+button:disabled { opacity: .35; cursor: default; }
+svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Top bar */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: calc(6px + env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line);
+}
+.top h1 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: .01em;
+}
+.top h1 span { display: block; }
+@media (min-width: 480px) {
+  .top h1 { font-size: 19px; }
+  .top h1 span { display: inline; }
+}
+.icon-btn {
+  flex: none;
+  width: 40px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+}
+.icon-btn svg { width: 22px; height: 22px; }
+.primary {
+  flex: none;
+  height: 38px;
+  margin-left: 4px;
+  padding: 0 12px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Layout actions */
+.actions {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+  padding: 0 max(4px, env(safe-area-inset-right, 0px)) 0 max(4px, env(safe-area-inset-left, 0px));
+}
+.actions button {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 4px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.actions button + button { border-left: 1px solid var(--line); }
+.actions .quiet { font-weight: 400; color: var(--muted); }
+#clear { color: var(--danger); }
+
+/* Drawing area */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--edge);
+}
+#board {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+#readout {
+  position: absolute;
+  top: 10px;
+  left: max(10px, env(safe-area-inset-left, 0px));
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--chrome);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: var(--text);
+  color: var(--chrome);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Tool settings */
+.options {
+  padding: 8px max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--line);
+}
+.opt { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.hint { margin: 0; color: var(--muted); font-size: 14px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button {
+  min-width: 50px;
+  height: 40px;
+  padding: 0 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.toggle::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+}
+.toggle[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.toggle[aria-pressed="true"]::before { background: currentColor; box-shadow: inset 0 0 0 2px var(--ink); }
+.shapes { display: flex; gap: 2px; }
+.shapes button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.shapes button svg { width: 22px; height: 22px; stroke-width: 3; }
+.shapes button[aria-pressed="true"] { border-color: var(--ink); background: var(--paper); color: var(--ink); }
+.row .seg.end { margin-left: auto; }
+
+/* Tools */
+.tools {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--line);
+}
+.tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.tools button svg { width: 22px; height: 22px; }
+.tools button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+@media (min-width: 700px) {
+  .tools { grid-template-columns: repeat(3, 150px); justify-content: center; }
+  .options, .actions { display: flex; justify-content: center; }
+  .actions button { flex: 0 0 auto; padding: 0 22px; }
+  .opt { width: 420px; }
+}
+
+/* Sheets */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(8, 18, 32, .6);
+}
+.sheet .panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  overflow: auto;
+  margin: 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  border-radius: 10px 10px 0 0;
+  background: var(--chrome);
+}
+.sheet h2 { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
+.sheet img {
+  display: block;
+  width: 100%;
+  max-height: 52dvh;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
+.sheet p { margin: 10px 0 14px; color: var(--muted); }
+.sheet p.warn { color: var(--danger); }
+.sheet .buttons { display: flex; gap: 8px; }
+.sheet .buttons > * {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-weight: 500;
+  text-decoration: none;
+  color: inherit;
+}
+.sheet .buttons .go { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.fields { display: flex; gap: 12px; }
+.fields label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-weight: 500; }
+.fields input {
+  width: 100%;
+  height: 46px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--text);
+  font: 500 18px var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: text;
+  user-select: text;
+}
+@media (min-width: 700px) {
+  .sheet { align-items: center; }
+  .sheet .panel { border-radius: 10px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1><span>FoD</span> <span>RoomMaker</span></h1>
+  <button class="icon-btn" id="undo" aria-label="Undo" disabled>
+    <svg viewBox="0 0 24 24"><path d="M8 7L4 11l4 4"/><path d="M4 11h10a5 5 0 0 1 0 10h-3"/></svg>
+  </button>
+  <button class="icon-btn" id="redo" aria-label="Redo" disabled>
+    <svg viewBox="0 0 24 24"><path d="M16 7l4 4-4 4"/><path d="M20 11H10a5 5 0 0 0 0 10h3"/></svg>
+  </button>
+  <button class="primary" id="save">Save picture</button>
+</header>
+
+<div class="actions" role="toolbar" aria-label="Layout actions">
+  <button id="gridBtn"><span class="quiet">Grid</span> <span id="gridLabel">32 × 32</span></button>
+  <button id="random">Random room</button>
+  <button id="clear" disabled>Delete all</button>
+</div>
+
+<main class="stage" id="stage">
+  <canvas id="board" aria-label="Room layout grid. Each square is 4 metres."></canvas>
+  <output id="readout" hidden></output>
+  <div id="toast" role="status" hidden></div>
+</main>
+
+<section class="options" aria-label="Tool settings">
+  <div class="opt" data-for="draw">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Piece" id="piece">
+        <button data-v="wall" aria-pressed="true">Wall</button>
+        <button data-v="door" aria-pressed="false">Door</button>
+        <button data-v="curve" aria-pressed="false">Curve</button>
+      </div>
+      <button class="toggle" id="cycle" aria-pressed="false">Tap to cycle</button>
+    </div>
+    <div class="row" id="pickRow">
+      <div class="shapes" role="group" aria-label="Angle" id="angle">
+        <button data-v="0" aria-pressed="true" aria-label="Horizontal"><svg viewBox="0 0 24 24"><path d="M3 12h18"/></svg></button>
+        <button data-v="1" aria-pressed="false" aria-label="Vertical"><svg viewBox="0 0 24 24"><path d="M12 3v18"/></svg></button>
+        <button data-v="2" aria-pressed="false" aria-label="Diagonal, top left to bottom right"><svg viewBox="0 0 24 24"><path d="M5 5l14 14"/></svg></button>
+        <button data-v="3" aria-pressed="false" aria-label="Diagonal, bottom left to top right"><svg viewBox="0 0 24 24"><path d="M19 5L5 19"/></svg></button>
+      </div>
+      <div class="shapes" role="group" aria-label="Curve direction" id="arcShape" hidden>
+        <button data-v="0" aria-pressed="true" aria-label="Curves toward top left"><svg viewBox="0 0 24 24"><path d="M4 20A16 16 0 0 1 20 4"/></svg></button>
+        <button data-v="1" aria-pressed="false" aria-label="Curves toward top right"><svg viewBox="0 0 24 24"><path d="M4 4A16 16 0 0 1 20 20"/></svg></button>
+        <button data-v="2" aria-pressed="false" aria-label="Curves toward bottom right"><svg viewBox="0 0 24 24"><path d="M20 4A16 16 0 0 1 4 20"/></svg></button>
+        <button data-v="3" aria-pressed="false" aria-label="Curves toward bottom left"><svg viewBox="0 0 24 24"><path d="M20 20A16 16 0 0 1 4 4"/></svg></button>
+      </div>
+      <div class="seg end" role="group" aria-label="Size" id="size">
+        <button data-v="1" aria-pressed="true">4 m</button>
+        <button data-v="2" aria-pressed="false">8 m</button>
+      </div>
+    </div>
+    <p class="hint" id="drawHint"></p>
+  </div>
+
+  <div class="opt" data-for="erase" hidden>
+    <p class="hint">Tap a piece to remove it, or drag across several.</p>
+  </div>
+
+  <div class="opt" data-for="move" hidden>
+    <p class="hint">Drag to move around the grid. Pinch with two fingers to zoom, in any tool.</p>
+  </div>
+</section>
+
+<nav class="tools" aria-label="Tools" id="tools">
+  <button data-tool="draw" aria-pressed="true">
+    <svg viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg>Draw
+  </button>
+  <button data-tool="erase" aria-pressed="false">
+    <svg viewBox="0 0 24 24"><path d="M9 19l-4.5-4.5a1.5 1.5 0 0 1 0-2l8-8a1.5 1.5 0 0 1 2 0l5 5a1.5 1.5 0 0 1 0 2L12 19z"/><path d="M9 9l6.5 6.5"/><path d="M6 21h14"/></svg>Erase
+  </button>
+  <button data-tool="move" aria-pressed="false">
+    <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>Move
+  </button>
+</nav>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="panel">
+    <h2 id="sheetTitle">Save picture</h2>
+    <img id="preview" alt="Picture of your room layout">
+    <p>If the download does not start, press and hold the picture and choose to save it.</p>
+    <div class="buttons">
+      <button id="closeSheet">Close</button>
+      <button id="share" hidden>Share</button>
+      <a class="go" id="download" download="fod-room.png" href="#">Download</a>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="gridSheet" role="dialog" aria-modal="true" aria-labelledby="gridTitle" hidden>
+  <form class="panel" id="gridForm" novalidate>
+    <h2 id="gridTitle">Grid size</h2>
+    <div class="fields">
+      <label>Squares across
+        <input id="gw" type="number" inputmode="numeric" min="1" max="1000" step="1" autocomplete="off">
+      </label>
+      <label>Squares down
+        <input id="gh" type="number" inputmode="numeric" min="1" max="1000" step="1" autocomplete="off">
+      </label>
+    </div>
+    <p id="gridInfo"></p>
+    <p class="warn" id="gridWarn" hidden></p>
+    <div class="buttons">
+      <button type="button" id="gridCancel">Cancel</button>
+      <button type="submit" class="go">Set grid size</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const M = 4;               // metres per square
+const MAX_GRID = 1000;
+const KEY = 'fod-roommaker-v1';
+const FONT = '"Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif';
+const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
+// For each curve direction: where the circle centre sits in its block, and the start quadrant.
+const SHAPES = [[1, 1, 2], [0, 1, 3], [0, 0, 0], [1, 0, 1]];
+
+const $ = id => document.getElementById(id);
+const stage = $('stage'), canvas = $('board'), ctx = canvas.getContext('2d');
+const readout = $('readout'), toastEl = $('toast');
+
+const state = { tool: 'draw', piece: 'wall', angle: 0, arcShape: 0, size: 1, cycle: false };
+let GW = 32, GH = 32;      // grid squares across and down
+let pieces = [];           // {t:'w'|'d',x1,y1,x2,y2} or {t:'a',cx,cy,r,a}
+let undoStack = [], redoStack = [];
+const view = { s: 40, ox: 0, oy: 0 };
+let cssW = 0, cssH = 0, dpr = 1;
+let ghost = null;
+let colors = {};
+
+/* ---------- helpers ---------- */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const inWorld = (x, y) => x >= 0 && y >= 0 && x <= GW && y <= GH;
+const fmt = m => String(Math.round(m * 10) / 10);
+const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+function canon(x1, y1, x2, y2) {
+  return (x1 < x2 || (x1 === x2 && y1 <= y2)) ? [x1, y1, x2, y2] : [x2, y2, x1, y1];
+}
+const segKey = (x1, y1, x2, y2) => canon(x1, y1, x2, y2).join(',');
+
+function unitSegs(p) {
+  const dx = p.x2 - p.x1, dy = p.y2 - p.y1;
+  const n = Math.max(Math.abs(dx), Math.abs(dy)), ux = Math.sign(dx), uy = Math.sign(dy);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(segKey(p.x1 + i * ux, p.y1 + i * uy, p.x1 + (i + 1) * ux, p.y1 + (i + 1) * uy));
+  }
+  return out;
+}
+
+function arcEnds(p) {
+  const b = (p.a + 1) % 4;
+  return [p.cx + p.r * COS[p.a], p.cy + p.r * SIN[p.a], p.cx + p.r * COS[b], p.cy + p.r * SIN[b]];
+}
+
+function samePiece(p, q) {
+  if (p.t !== q.t) return false;
+  if (p.t === 'a') return p.cx === q.cx && p.cy === q.cy && p.r === q.r && p.a === q.a;
+  return p.x1 === q.x1 && p.y1 === q.y1 && p.x2 === q.x2 && p.y2 === q.y2;
+}
+
+function bounds() {
+  if (!pieces.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const add = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  for (const p of pieces) {
+    if (p.t === 'a') { const e = arcEnds(p); add(e[0], e[1]); add(e[2], e[3]); }
+    else { add(p.x1, p.y1); add(p.x2, p.y2); }
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function distSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1);
+  return Math.hypot(px - x1 - t * dx, py - y1 - t * dy);
+}
+
+function distPiece(p, px, py) {
+  if (p.t !== 'a') return distSeg(px, py, p.x1, p.y1, p.x2, p.y2);
+  const dx = px - p.cx, dy = py - p.cy;
+  let ang = Math.atan2(dy, dx);
+  if (ang < 0) ang += 2 * Math.PI;
+  const a0 = p.a * Math.PI / 2;
+  if (ang >= a0 && ang <= a0 + Math.PI / 2) return Math.abs(Math.hypot(dx, dy) - p.r);
+  const e = arcEnds(p);
+  return Math.min(Math.hypot(px - e[0], py - e[1]), Math.hypot(px - e[2], py - e[3]));
+}
+
+function pieceLabel(p) {
+  if (p.t === 'a') return `Curve, ${p.r * M} m radius`;
+  return `${p.t === 'd' ? 'Door' : 'Wall'} ${fmt(Math.hypot(p.x2 - p.x1, p.y2 - p.y1) * M)} m`;
+}
+
+/* ---------- editing ---------- */
+// replace: a tapped wall takes the place of a door under it; a dragged run leaves doors alone.
+function addWalls(x1, y1, x2, y2, replace) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const n = Math.max(Math.abs(dx), Math.abs(dy)), ux = Math.sign(dx), uy = Math.sign(dy);
+  const want = [];
+  for (let i = 0; i < n; i++) want.push(canon(x1 + i * ux, y1 + i * uy, x1 + (i + 1) * ux, y1 + (i + 1) * uy));
+  let changed = 0;
+  if (replace) {
+    const keys = new Set(want.map(c => c.join(',')));
+    const before = pieces.length;
+    pieces = pieces.filter(p => p.t !== 'd' || !unitSegs(p).some(k => keys.has(k)));
+    changed += before - pieces.length;
+  }
+  const taken = new Set();
+  for (const p of pieces) if (p.t !== 'a') for (const k of unitSegs(p)) taken.add(k);
+  for (const c of want) {
+    const k = c.join(',');
+    if (taken.has(k)) continue;
+    pieces.push({ t: 'w', x1: c[0], y1: c[1], x2: c[2], y2: c[3] });
+    taken.add(k);
+    changed++;
+  }
+  return changed;
+}
+
+function addDoor(x1, y1, x2, y2) {
+  const c = canon(x1, y1, x2, y2);
+  const d = { t: 'd', x1: c[0], y1: c[1], x2: c[2], y2: c[3] };
+  if (pieces.some(p => samePiece(p, d))) return 0;
+  const keys = new Set(unitSegs(d));
+  // A door replaces any wall or door pieces it sits on.
+  pieces = pieces.filter(p => p.t === 'a' || !unitSegs(p).some(k => keys.has(k)));
+  pieces.push(d);
+  return 1;
+}
+
+function addArc(a) {
+  if (pieces.some(p => samePiece(p, a))) return 0;
+  pieces.push({ t: 'a', cx: a.cx, cy: a.cy, r: a.r, a: a.a });
+  return 1;
+}
+
+function commitPiece(p, replace) {
+  if (p.t === 'a') return addArc(p);
+  if (p.t === 'd') return addDoor(p.x1, p.y1, p.x2, p.y2);
+  return addWalls(p.x1, p.y1, p.x2, p.y2, replace);
+}
+
+function nearestEdge(w) {
+  const cx = clamp(Math.floor(w.x), 0, GW - 1), cy = clamp(Math.floor(w.y), 0, GH - 1);
+  const fx = clamp(w.x - cx, 0, 1), fy = clamp(w.y - cy, 0, 1);
+  const opts = [
+    { d: fy, seg: [cx, cy, cx + 1, cy] },
+    { d: 1 - fy, seg: [cx, cy + 1, cx + 1, cy + 1] },
+    { d: fx, seg: [cx, cy, cx, cy + 1] },
+    { d: 1 - fx, seg: [cx + 1, cy, cx + 1, cy + 1] }
+  ];
+  const e = opts.reduce((a, b) => (b.d < a.d ? b : a));
+  return { d: e.d, seg: e.seg, cx, cy };
+}
+
+// The piece picked in the menu, positioned where the finger is. Null if it cannot fit on the grid.
+function stampAt(w) {
+  const L = state.size;
+  if (GW < L && GH < L) return null;
+  const along = (v, max) => clamp(L === 1 ? Math.floor(v) : Math.round(v) - 1, 0, max - L);
+  if (state.piece === 'curve') {
+    if (GW < L || GH < L) return null;
+    const bx = along(w.x, GW), by = along(w.y, GH), s = SHAPES[state.arcShape];
+    return { t: 'a', cx: bx + s[0] * L, cy: by + s[1] * L, r: L, a: s[2] };
+  }
+  const t = state.piece === 'door' ? 'd' : 'w';
+  let seg;
+  if (state.angle === 0) {
+    if (GW < L) return null;
+    const x = along(w.x, GW), y = clamp(Math.round(w.y), 0, GH);
+    seg = [x, y, x + L, y];
+  } else if (state.angle === 1) {
+    if (GH < L) return null;
+    const x = clamp(Math.round(w.x), 0, GW), y = along(w.y, GH);
+    seg = [x, y, x, y + L];
+  } else {
+    if (GW < L || GH < L) return null;
+    const bx = along(w.x, GW), by = along(w.y, GH);
+    seg = state.angle === 2 ? [bx, by, bx + L, by + L] : canon(bx + L, by, bx, by + L);
+  }
+  return { t, x1: seg[0], y1: seg[1], x2: seg[2], y2: seg[3] };
+}
+
+// Tap to cycle: an edge goes wall, door, empty. The middle of a square goes through diagonals, then curves.
+function cycleAt(w) {
+  const e = nearestEdge(w);
+  if (e.d < 0.3) {
+    const s = e.seg, k = segKey(s[0], s[1], s[2], s[3]);
+    const cur = pieces.find(p => p.t !== 'a' && unitSegs(p).includes(k));
+    if (!cur) addWalls(s[0], s[1], s[2], s[3], false);
+    else {
+      pieces = pieces.filter(p => p !== cur);
+      if (cur.t === 'w') addDoor(s[0], s[1], s[2], s[3]);
+    }
+    return true;
+  }
+  const cx = e.cx, cy = e.cy;
+  const opts = [
+    { t: 'w', x1: cx, y1: cy, x2: cx + 1, y2: cy + 1 },
+    { t: 'w', x1: cx, y1: cy + 1, x2: cx + 1, y2: cy },
+    { t: 'd', x1: cx, y1: cy, x2: cx + 1, y2: cy + 1 },
+    { t: 'd', x1: cx, y1: cy + 1, x2: cx + 1, y2: cy }
+  ];
+  for (const s of SHAPES) opts.push({ t: 'a', cx: cx + s[0], cy: cy + s[1], r: 1, a: s[2] });
+  let idx = -1;
+  opts.forEach((o, i) => { if (pieces.some(p => samePiece(p, o))) idx = i; });
+  pieces = pieces.filter(p => !opts.some(o => samePiece(p, o)));
+  if (opts[idx + 1]) commitPiece(opts[idx + 1], true);
+  return true;
+}
+
+function snapWall(sx, sy, w) {
+  const dx = w.x - sx, dy = w.y - sy;
+  const gx = Math.sign(dx) || 1, gy = Math.sign(dy) || 1;
+  const roomX = gx > 0 ? GW - sx : sx, roomY = gy > 0 ? GH - sy : sy;
+  const n = Math.min(Math.round((Math.abs(dx) + Math.abs(dy)) / 2), roomX, roomY);
+  const cands = [
+    [clamp(sx + Math.round(dx), 0, GW), sy],
+    [sx, clamp(sy + Math.round(dy), 0, GH)],
+    [sx + n * gx, sy + n * gy]
+  ];
+  let best = null, bd = Infinity;
+  for (const c of cands) {
+    const d = Math.hypot(w.x - c[0], w.y - c[1]);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return (best[0] === sx && best[1] === sy) ? null : { x: best[0], y: best[1] };
+}
+
+function eraseAt(x, y) {
+  const hr = clamp(16 / view.s, 0.12, 0.5);
+  const before = pieces.length;
+  pieces = pieces.filter(p => distPiece(p, x, y) > hr);
+  return pieces.length !== before;
+}
+
+/* ---------- random room ---------- */
+function randomRoom() {
+  if (GW < 4 || GH < 4) { toast('The grid is too small for a random room. Set it to at least 4 × 4.'); return; }
+  const w = ri(4, Math.min(GW >= 6 ? GW - 2 : GW, 16));
+  const h = ri(4, Math.min(GH >= 6 ? GH - 2 : GH, 16));
+  const x0 = Math.floor((GW - w) / 2), y0 = Math.floor((GH - h) / 2), x1 = x0 + w, y1 = y0 + h;
+  const maxCut = Math.min(2, Math.floor((Math.min(w, h) - 1) / 2));
+  // Each corner is square, cut on the diagonal, or curved.
+  const corner = () => {
+    const r = Math.random();
+    return r < 0.4 ? { kind: 0, c: 0 } : { kind: r < 0.7 ? 1 : 2, c: ri(1, maxCut) };
+  };
+  const k = [corner(), corner(), corner(), corner()];   // top left, top right, bottom right, bottom left
+  const snap = snapshot(), had = pieces.length > 0;
+  pieces = [];
+
+  const sides = [
+    [x0 + k[0].c, y0, x1 - k[1].c, y0],
+    [x1, y0 + k[1].c, x1, y1 - k[2].c],
+    [x0 + k[3].c, y1, x1 - k[2].c, y1],
+    [x0, y0 + k[0].c, x0, y1 - k[3].c]
+  ];
+  for (const s of sides) addWalls(s[0], s[1], s[2], s[3], false);
+  const corners = [
+    [x0, y0 + k[0].c, x0 + k[0].c, y0, x0 + k[0].c, y0 + k[0].c, 2],
+    [x1 - k[1].c, y0, x1, y0 + k[1].c, x1 - k[1].c, y0 + k[1].c, 3],
+    [x1, y1 - k[2].c, x1 - k[2].c, y1, x1 - k[2].c, y1 - k[2].c, 0],
+    [x0 + k[3].c, y1, x0, y1 - k[3].c, x0 + k[3].c, y1 - k[3].c, 1]
+  ];
+  k.forEach((c, i) => {
+    const q = corners[i];
+    if (c.kind === 1) addWalls(q[0], q[1], q[2], q[3], false);
+    else if (c.kind === 2) addArc({ t: 'a', cx: q[4], cy: q[5], r: c.c, a: q[6] });
+  });
+
+  // Sometimes split the room with an inner wall that has its own door.
+  if (Math.random() < 0.45) {
+    if (w >= h) {
+      const lo = x0 + Math.max(k[0].c, k[3].c, 1) + 1, hi = x1 - Math.max(k[1].c, k[2].c, 1) - 1;
+      if (hi >= lo) {
+        const x = ri(lo, hi), dy = ri(y0, y1 - 1);
+        addWalls(x, y0, x, y1, false);
+        addDoor(x, dy, x, dy + 1);
+      }
+    } else {
+      const lo = y0 + Math.max(k[0].c, k[1].c, 1) + 1, hi = y1 - Math.max(k[2].c, k[3].c, 1) - 1;
+      if (hi >= lo) {
+        const y = ri(lo, hi), dx = ri(x0, x1 - 1);
+        addWalls(x0, y, x1, y, false);
+        addDoor(dx, y, dx + 1, y);
+      }
+    }
+  }
+
+  // One to three doors on the outer walls.
+  for (let i = ri(1, 3); i > 0; i--) {
+    const s = sides[ri(0, 3)];
+    const len = Math.abs(s[2] - s[0]) + Math.abs(s[3] - s[1]);
+    const L = (len >= 2 && Math.random() < 0.4) ? 2 : 1;
+    const o = ri(0, len - L), ux = Math.sign(s[2] - s[0]), uy = Math.sign(s[3] - s[1]);
+    addDoor(s[0] + ux * o, s[1] + uy * o, s[0] + ux * (o + L), s[1] + uy * (o + L));
+  }
+
+  pushUndo(snap);
+  persist();
+  fitView();
+  updateUI();
+  invalidate();
+  toast(had ? 'Random room made. Undo brings back your old layout.' : 'Random room made.');
+}
+
+/* ---------- history and storage ---------- */
+const snapshot = () => JSON.stringify({ gw: GW, gh: GH, pieces });
+function loadSnapshot(str) {
+  const d = JSON.parse(str);
+  GW = d.gw; GH = d.gh; pieces = d.pieces;
+}
+function pushUndo(snap) {
+  undoStack.push(snap);
+  if (undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify({ v: 2, gw: GW, gh: GH, pieces })); } catch (_) { /* storage unavailable */ }
+}
+function validPiece(p) {
+  if (!p || typeof p !== 'object') return false;
+  const int = Number.isInteger;
+  if (p.t === 'a') {
+    if (!(int(p.cx) && int(p.cy) && (p.r === 1 || p.r === 2) && int(p.a) && p.a >= 0 && p.a < 4)) return false;
+    const e = arcEnds(p);
+    return inWorld(p.cx, p.cy) && inWorld(e[0], e[1]) && inWorld(e[2], e[3]);
+  }
+  if (p.t !== 'w' && p.t !== 'd') return false;
+  if (![p.x1, p.y1, p.x2, p.y2].every(int) || !inWorld(p.x1, p.y1) || !inWorld(p.x2, p.y2)) return false;
+  const dx = Math.abs(p.x2 - p.x1), dy = Math.abs(p.y2 - p.y1), n = Math.max(dx, dy);
+  if (n < 1 || !(dx === 0 || dy === 0 || dx === dy)) return false;
+  return p.t === 'w' ? n === 1 : n <= 2;
+}
+const validSize = n => Number.isInteger(n) && n >= 1 && n <= MAX_GRID;
+function restore() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (!d || !Array.isArray(d.pieces)) return;
+    if (validSize(d.gw) && validSize(d.gh)) { GW = d.gw; GH = d.gh; }
+    pieces = d.pieces.filter(validPiece);
+  } catch (_) { /* nothing saved */ }
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  loadSnapshot(undoStack.pop());
+  afterChange();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  loadSnapshot(redoStack.pop());
+  afterChange();
+}
+function afterChange() {
+  persist();
+  clampView();
+  updateUI();
+  invalidate();
+}
+
+/* ---------- drawing ---------- */
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const [k, v] of [['paper', '--paper'], ['edge', '--edge'], ['grid', '--grid'], ['gridStrong', '--grid-strong'],
+    ['ink', '--ink'], ['door', '--door'], ['doorRim', '--door-rim'], ['chrome', '--chrome'], ['line', '--line'], ['text', '--text']]) {
+    colors[k] = cs.getPropertyValue(v).trim();
+  }
+}
+
+// Grid lines thin out as you zoom out, so a huge grid never turns into a solid block.
+function gridSteps(s) {
+  const S = [1, 5, 10, 50, 100, 500, 1000];
+  let i = 0;
+  while (i < S.length - 1 && S[i] * s < 7) i++;
+  return [S[i], S[Math.min(i + 1, S.length - 1)]];
+}
+
+function drawGrid(c, v, w, h, full) {
+  let gx0, gx1, gy0, gy1, top, bottom, left, right;
+  if (full) {
+    c.fillStyle = colors.paper; c.fillRect(0, 0, w, h);
+    gx0 = Math.floor(-v.ox / v.s); gx1 = Math.ceil((w - v.ox) / v.s);
+    gy0 = Math.floor(-v.oy / v.s); gy1 = Math.ceil((h - v.oy) / v.s);
+    top = 0; bottom = h; left = 0; right = w;
+  } else {
+    c.fillStyle = colors.edge; c.fillRect(0, 0, w, h);
+    c.fillStyle = colors.paper; c.fillRect(v.ox, v.oy, GW * v.s, GH * v.s);
+    gx0 = Math.max(0, Math.floor(-v.ox / v.s)); gx1 = Math.min(GW, Math.ceil((w - v.ox) / v.s));
+    gy0 = Math.max(0, Math.floor(-v.oy / v.s)); gy1 = Math.min(GH, Math.ceil((h - v.oy) / v.s));
+    top = Math.max(0, v.oy); bottom = Math.min(h, v.oy + GH * v.s);
+    left = Math.max(0, v.ox); right = Math.min(w, v.ox + GW * v.s);
+  }
+  const [minor, major] = gridSteps(v.s);
+  c.lineWidth = 1;
+  c.lineCap = 'butt';
+  for (const strong of [false, true]) {
+    c.strokeStyle = strong ? colors.gridStrong : colors.grid;
+    c.beginPath();
+    for (let x = Math.ceil(gx0 / minor) * minor; x <= gx1; x += minor) {
+      if ((x % major === 0) !== strong) continue;
+      const X = Math.round(v.ox + x * v.s) + 0.5;
+      c.moveTo(X, top); c.lineTo(X, bottom);
+    }
+    for (let y = Math.ceil(gy0 / minor) * minor; y <= gy1; y += minor) {
+      if ((y % major === 0) !== strong) continue;
+      const Y = Math.round(v.oy + y * v.s) + 0.5;
+      c.moveTo(left, Y); c.lineTo(right, Y);
+    }
+    c.stroke();
+  }
+  if (!full) {
+    c.strokeStyle = colors.gridStrong;
+    c.strokeRect(Math.round(v.ox) + 0.5, Math.round(v.oy) + 0.5, Math.round(GW * v.s), Math.round(GH * v.s));
+  }
+}
+
+function drawPieces(c, list, v) {
+  const s = v.s, X = x => v.ox + x * s, Y = y => v.oy + y * s;
+  const wall = Math.max(2.5, s * 0.2);
+  const door = Math.max(4.5, wall * 1.7);
+  const rim = Math.max(1, wall * 0.14);
+
+  // Walls and curved walls: blue lines.
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = colors.ink; c.lineWidth = wall;
+  c.beginPath();
+  for (const p of list) {
+    if (p.t === 'w') { c.moveTo(X(p.x1), Y(p.y1)); c.lineTo(X(p.x2), Y(p.y2)); }
+    else if (p.t === 'a') {
+      const e = arcEnds(p);
+      c.moveTo(X(e[0]), Y(e[1]));
+      c.arc(X(p.cx), Y(p.cy), p.r * s, p.a * Math.PI / 2, (p.a + 1) * Math.PI / 2);
+    }
+  }
+  c.stroke();
+
+  // Doors: thicker yellow lines on top, with a thin rim so they stay clear on pale paper.
+  c.lineCap = 'butt';
+  for (const pass of [0, 1]) {
+    c.strokeStyle = pass ? colors.door : colors.doorRim;
+    c.lineWidth = pass ? door : door + 2 * rim;
+    c.beginPath();
+    for (const p of list) {
+      if (p.t !== 'd') continue;
+      const len = Math.hypot(p.x2 - p.x1, p.y2 - p.y1);
+      const ex = pass ? 0 : (p.x2 - p.x1) / len * rim, ey = pass ? 0 : (p.y2 - p.y1) / len * rim;
+      c.moveTo(X(p.x1) - ex, Y(p.y1) - ey); c.lineTo(X(p.x2) + ex, Y(p.y2) + ey);
+    }
+    c.stroke();
+  }
+}
+
+function render() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawGrid(ctx, view, cssW, cssH, false);
+  drawPieces(ctx, pieces, view);
+  if (ghost) {
+    ctx.globalAlpha = 0.55;
+    drawPieces(ctx, ghost.list, view);
+    if (ghost.dot) {
+      ctx.beginPath();
+      ctx.arc(view.ox + ghost.dot[0] * view.s, view.oy + ghost.dot[1] * view.s, Math.max(5, view.s * 0.16), 0, Math.PI * 2);
+      ctx.fillStyle = colors.ink; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+let raf = 0;
+function invalidate() {
+  if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); });
+}
+
+/* ---------- view ---------- */
+const MAX_SCALE = 110;
+const minScale = () => clamp(Math.min(cssW / (GW + 2), cssH / (GH + 2)), 0.2, 60);
+function clampView() {
+  view.s = clamp(view.s, minScale(), MAX_SCALE);
+  view.ox = clamp(view.ox, cssW / 2 - GW * view.s, cssW / 2);
+  view.oy = clamp(view.oy, cssH / 2 - GH * view.s, cssH / 2);
+}
+function fitView() {
+  const b = bounds();
+  let cx = GW / 2, cy = GH / 2;
+  if (b) {
+    const w = b.x1 - b.x0 + 4, h = b.y1 - b.y0 + 4;
+    view.s = clamp(Math.min(cssW / w, cssH / h), minScale(), 56);
+    cx = (b.x0 + b.x1) / 2; cy = (b.y0 + b.y1) / 2;
+  } else {
+    view.s = clamp(Math.min(cssW / (GW + 1), cssH / (GH + 1)), 30, 80);
+  }
+  view.ox = cssW / 2 - cx * view.s;
+  view.oy = cssH / 2 - cy * view.s;
+  clampView();
+}
+function zoomAt(p, s) {
+  s = clamp(s, minScale(), MAX_SCALE);
+  const wx = (p.x - view.ox) / view.s, wy = (p.y - view.oy) / view.s;
+  view.s = s; view.ox = p.x - wx * s; view.oy = p.y - wy * s;
+  clampView(); invalidate();
+}
+function resize() {
+  const r = stage.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const first = !cssW;
+  cssW = r.width; cssH = r.height;
+  dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  if (first) fitView();
+  clampView();
+  render();
+}
+
+/* ---------- interface ---------- */
+function setReadout(text) {
+  readout.textContent = text;
+  readout.hidden = !text;
+}
+function idleReadout() {
+  const b = bounds();
+  setReadout(b ? `Layout ${(b.x1 - b.x0) * M} × ${(b.y1 - b.y0) * M} m` : '');
+}
+function updateUI() {
+  $('undo').disabled = !undoStack.length;
+  $('redo').disabled = !redoStack.length;
+  $('clear').disabled = !pieces.length;
+  $('gridLabel').textContent = `${GW} × ${GH}`;
+  idleReadout();
+}
+let toastTimer = 0;
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.hidden = true; }, 3200);
+}
+function setTool(t) {
+  state.tool = t;
+  for (const b of $('tools').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
+  for (const o of document.querySelectorAll('.opt')) o.hidden = o.dataset.for !== t;
+}
+function updateDrawPanel() {
+  for (const b of $('piece').querySelectorAll('button')) b.disabled = state.cycle;
+  $('pickRow').hidden = state.cycle;
+  $('angle').hidden = state.piece === 'curve';
+  $('arcShape').hidden = state.piece !== 'curve';
+  $('size').setAttribute('aria-label', state.piece === 'curve' ? 'Radius' : 'Size');
+  $('drawHint').textContent = state.cycle
+    ? 'Tap an edge to switch it between wall, door and empty. Tap the middle of a square to step through diagonals and curves.'
+    : state.piece === 'wall' ? 'Tap to place. Drag from a corner to draw a long wall in one go.'
+    : state.piece === 'door' ? 'Tap to place. A door takes the place of any wall under it.'
+    : 'Tap a square to place the curved wall.';
+}
+function bindGroup(id, key, numeric) {
+  const group = $(id);
+  group.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    state[key] = numeric ? Number(b.dataset.v) : b.dataset.v;
+    for (const x of group.querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+    updateDrawPanel();
+  });
+}
+
+/* ---------- sheets ---------- */
+let lastFocus = null;
+function openSheet(id, focusEl) {
+  lastFocus = document.activeElement;
+  $(id).hidden = false;
+  if (focusEl) focusEl.focus();
+}
+function closeSheets() {
+  $('sheet').hidden = true;
+  $('gridSheet').hidden = true;
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+
+function readGridInputs() {
+  const w = Number($('gw').value), h = Number($('gh').value);
+  return (validSize(w) && validSize(h)) ? { w, h } : null;
+}
+function updateGridInfo() {
+  const g = readGridInputs(), warn = $('gridWarn');
+  if (!g) {
+    $('gridInfo').textContent = `Enter whole numbers from 1 to ${MAX_GRID}.`;
+    warn.hidden = true;
+    return;
+  }
+  $('gridInfo').textContent = `That is ${g.w * M} × ${g.h * M} m. Each square is ${M} m.`;
+  const ow = GW, oh = GH;
+  GW = g.w; GH = g.h;
+  const lost = pieces.filter(p => !validPiece(p)).length;
+  GW = ow; GH = oh;
+  warn.hidden = !lost;
+  warn.textContent = lost ? `${lost} ${lost === 1 ? 'piece falls' : 'pieces fall'} outside this size and will be removed. Undo brings them back.` : '';
+}
+function applyGrid(w, h) {
+  if (w === GW && h === GH) return;
+  const snap = snapshot();
+  GW = w; GH = h;
+  pieces = pieces.filter(validPiece);
+  pushUndo(snap);
+  persist();
+  fitView();
+  updateUI();
+  invalidate();
+  toast(`Grid set to ${w} × ${h} squares.`);
+}
+
+/* ---------- pointer input ---------- */
+const pts = new Map();
+let mode = null;            // 'stroke' | 'pan' | 'pinch' | 'wait'
+let stroke = null, panRef = null, pinchRef = null, spaceDown = false;
+
+function pos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+const toWorld = p => ({ x: (p.x - view.ox) / view.s, y: (p.y - view.oy) / view.s });
+
+function beginStroke(p) {
+  const w = toWorld(p);
+  mode = 'stroke';
+  stroke = {
+    kind: state.tool === 'erase' ? 'erase' : state.cycle ? 'cycle' : 'stamp',
+    down: p, moved: false, changed: false, snapshot: snapshot(),
+    sx: clamp(Math.round(w.x), 0, GW), sy: clamp(Math.round(w.y), 0, GH),
+    end: null, last: w
+  };
+  moveStroke(p);
+}
+
+function moveStroke(p) {
+  const st = stroke, w = toWorld(p);
+  if (!st.moved && Math.hypot(p.x - st.down.x, p.y - st.down.y) > 8) st.moved = true;
+
+  if (st.kind === 'stamp') {
+    if (state.piece === 'wall' && st.moved) {
+      // Dragging a wall draws a straight run from the corner where the drag began.
+      st.end = snapWall(st.sx, st.sy, w);
+      ghost = { list: st.end ? [{ t: 'w', x1: st.sx, y1: st.sy, x2: st.end.x, y2: st.end.y }] : [], dot: [st.sx, st.sy] };
+      if (st.end) setReadout(`Wall ${fmt(Math.hypot(st.end.x - st.sx, st.end.y - st.sy) * M)} m`);
+      else idleReadout();
+    } else {
+      const piece = stampAt(w);
+      ghost = piece ? { list: [piece] } : null;
+      if (piece) setReadout(pieceLabel(piece)); else idleReadout();
+    }
+  } else if (st.kind === 'erase') {
+    const steps = Math.max(1, Math.ceil(Math.hypot(w.x - st.last.x, w.y - st.last.y) / 0.2));
+    for (let i = 1; i <= steps; i++) {
+      const f = i / steps;
+      if (eraseAt(st.last.x + (w.x - st.last.x) * f, st.last.y + (w.y - st.last.y) * f)) st.changed = true;
+    }
+    st.last = w;
+  }
+  invalidate();
+}
+
+function endStroke(p) {
+  const st = stroke, w = toWorld(p);
+  stroke = null; ghost = null;
+  let changed = false;
+  if (st.kind === 'stamp') {
+    if (state.piece === 'wall' && st.moved) {
+      if (st.end) changed = addWalls(st.sx, st.sy, st.end.x, st.end.y, false) > 0;
+    } else {
+      const piece = stampAt(w);
+      if (piece) changed = commitPiece(piece, true) > 0;
+      else toast('That piece does not fit on this grid. Pick a smaller size or a bigger grid.');
+    }
+  } else if (st.kind === 'cycle') {
+    if (!st.moved) changed = cycleAt(w);
+  } else {
+    changed = st.changed;
+  }
+  if (changed) { pushUndo(st.snapshot); persist(); }
+  updateUI();
+  invalidate();
+}
+
+function cancelStroke() {
+  if (!stroke) return;
+  if (stroke.changed) loadSnapshot(stroke.snapshot);
+  stroke = null; ghost = null;
+  updateUI();
+  invalidate();
+}
+
+function beginPinch() {
+  const [a, b] = [...pts.values()];
+  pinchRef = {
+    d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+    mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2,
+    s: view.s, ox: view.ox, oy: view.oy
+  };
+  mode = 'pinch';
+}
+function movePinch() {
+  if (pts.size < 2) return;
+  const [a, b] = [...pts.values()];
+  const d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  const r = pinchRef;
+  const s = clamp(r.s * d / r.d, minScale(), MAX_SCALE);
+  view.s = s;
+  view.ox = mx - (r.mx - r.ox) / r.s * s;
+  view.oy = my - (r.my - r.oy) / r.s * s;
+  clampView();
+  invalidate();
+}
+
+canvas.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse' && e.button > 2) return;
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* not capturable */ }
+  const p = pos(e);
+  pts.set(e.pointerId, p);
+  if (pts.size === 2) { cancelStroke(); beginPinch(); return; }
+  if (pts.size > 2) return;
+  if (state.tool === 'move' || e.button === 1 || e.button === 2 || spaceDown) {
+    mode = 'pan';
+    panRef = { p, ox: view.ox, oy: view.oy };
+    return;
+  }
+  beginStroke(p);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  const p = pos(e);
+  pts.set(e.pointerId, p);
+  if (mode === 'pinch') movePinch();
+  else if (mode === 'pan') {
+    view.ox = panRef.ox + p.x - panRef.p.x;
+    view.oy = panRef.oy + p.y - panRef.p.y;
+    clampView();
+    invalidate();
+  } else if (mode === 'stroke') moveStroke(p);
+});
+function pointerEnd(e) {
+  if (!pts.has(e.pointerId)) return;
+  const p = pts.get(e.pointerId);
+  pts.delete(e.pointerId);
+  if (mode === 'stroke') {
+    if (e.type === 'pointercancel') cancelStroke(); else endStroke(p);
+    mode = null;
+  } else if (mode === 'pinch') {
+    mode = pts.size ? 'wait' : null;
+  } else if (pts.size === 0) {
+    mode = null;
+  }
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', pointerEnd);
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(pos(e), view.s * Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+
+/* ---------- save picture ---------- */
+let pictureUrl = null, pictureBlob = null;
+
+function makePicture() {
+  const b = bounds();
+  if (!b) { toast('Nothing to save yet. Place a wall first.'); return; }
+  const pad = 1, footer = 72;
+  const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+  const wc = bw + 2 * pad, hc = bh + 2 * pad;
+  const s = clamp(Math.floor(4096 / Math.max(wc, hc)), 2, 64);
+  const W = Math.max(Math.round(wc * s), 560), mapH = Math.round(hc * s);
+  const c = document.createElement('canvas');
+  c.width = W; c.height = mapH + footer;
+  const x = c.getContext('2d');
+  const v = { s, ox: (W - bw * s) / 2 - b.x0 * s, oy: pad * s - b.y0 * s };
+
+  x.save();
+  x.beginPath(); x.rect(0, 0, W, mapH); x.clip();
+  drawGrid(x, v, W, mapH, true);
+  drawPieces(x, pieces, v);
+  x.restore();
+
+  // Footer with a scale bar and the overall size.
+  x.fillStyle = colors.chrome; x.fillRect(0, mapH, W, footer);
+  x.fillStyle = colors.line; x.fillRect(0, mapH, W, 2);
+  const units = [1, 2, 5, 10, 25, 50, 100, 250].find(n => n * s >= 48) || 250;
+  const bar = units * s, bx = 28, by = mapH + footer / 2 + 1;
+  x.strokeStyle = colors.text; x.lineWidth = 3; x.lineCap = 'butt';
+  x.beginPath();
+  x.moveTo(bx, by); x.lineTo(bx + bar, by);
+  x.moveTo(bx, by - 8); x.lineTo(bx, by + 8);
+  x.moveTo(bx + bar, by - 8); x.lineTo(bx + bar, by + 8);
+  x.stroke();
+  x.fillStyle = colors.text;
+  x.font = '500 24px ' + FONT;
+  x.textBaseline = 'middle';
+  x.textAlign = 'left';
+  x.fillText(`${units * M} m`, bx + bar + 14, by + 1);
+  x.textAlign = 'right';
+  x.fillText(`${bw * M} × ${bh * M} m`, W - 28, by + 1);
+
+  c.toBlob(blob => {
+    if (!blob) { toast('The picture could not be made. Try again.'); return; }
+    if (pictureUrl) URL.revokeObjectURL(pictureUrl);
+    pictureBlob = blob;
+    pictureUrl = URL.createObjectURL(blob);
+    $('preview').src = pictureUrl;
+    $('download').href = pictureUrl;
+    let canShare = false;
+    try {
+      const f = new File([blob], 'fod-room.png', { type: 'image/png' });
+      canShare = !!(navigator.canShare && navigator.canShare({ files: [f] }));
+    } catch (_) { /* sharing unavailable */ }
+    $('share').hidden = !canShare;
+    openSheet('sheet', $('download'));
+  }, 'image/png');
+}
+
+/* ---------- wiring ---------- */
+$('tools').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) setTool(b.dataset.tool);
+});
+bindGroup('piece', 'piece', false);
+bindGroup('angle', 'angle', true);
+bindGroup('arcShape', 'arcShape', true);
+bindGroup('size', 'size', true);
+$('cycle').addEventListener('click', () => {
+  state.cycle = !state.cycle;
+  $('cycle').setAttribute('aria-pressed', String(state.cycle));
+  updateDrawPanel();
+});
+$('undo').addEventListener('click', undo);
+$('redo').addEventListener('click', redo);
+$('clear').addEventListener('click', () => {
+  if (!pieces.length) return;
+  pushUndo(snapshot());
+  pieces = [];
+  afterChange();
+  toast('Deleted everything. Undo brings it back.');
+});
+$('random').addEventListener('click', randomRoom);
+$('save').addEventListener('click', makePicture);
+$('closeSheet').addEventListener('click', closeSheets);
+$('share').addEventListener('click', async () => {
+  try {
+    await navigator.share({ files: [new File([pictureBlob], 'fod-room.png', { type: 'image/png' })], title: 'FoD room layout' });
+  } catch (_) { /* share closed */ }
+});
+$('gridBtn').addEventListener('click', () => {
+  $('gw').value = GW; $('gh').value = GH;
+  updateGridInfo();
+  openSheet('gridSheet', $('gw'));
+  $('gw').select();
+});
+$('gw').addEventListener('input', updateGridInfo);
+$('gh').addEventListener('input', updateGridInfo);
+$('gridCancel').addEventListener('click', closeSheets);
+$('gridForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const g = readGridInputs();
+  if (!g) { updateGridInfo(); return; }
+  closeSheets();
+  applyGrid(g.w, g.h);
+});
+for (const id of ['sheet', 'gridSheet']) {
+  $(id).addEventListener('click', e => { if (e.target === $(id)) closeSheets(); });
+}
+
+window.addEventListener('keydown', e => {
+  const sheetOpen = !$('sheet').hidden || !$('gridSheet').hidden;
+  if (e.key === 'Escape' && sheetOpen) { closeSheets(); return; }
+  if (sheetOpen) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    if (e.shiftKey) redo(); else undo();
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+    e.preventDefault(); redo();
+  } else if (e.key === ' ' && (e.target === document.body || e.target === canvas)) {
+    spaceDown = true; e.preventDefault();
+  }
+});
+window.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
+
+const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+const onScheme = () => { readColors(); invalidate(); };
+if (scheme.addEventListener) scheme.addEventListener('change', onScheme);
+
+readColors();
+restore();
+updateDrawPanel();
+updateUI();
+if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+else window.addEventListener('resize', resize);
+resize();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(invalidate);
+})();
+</script>
+</body>
+</html>
